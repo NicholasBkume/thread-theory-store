@@ -44,3 +44,5 @@ app.listen(PORT, () => {
     
     connectDB();
 });
+
+//make sure you've installed express 4.20.0 or lower as render.com is not compatible with express 5.
