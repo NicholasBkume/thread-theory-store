@@ -79,7 +79,7 @@ JSON responses
 
 ## Prerequisites
 
-- Node.js 18+ recommended
+- Node.js 20+ recommended for the current Vitest toolchain
 - npm
 - MongoDB or MongoDB Atlas
 - Redis-compatible instance
@@ -189,6 +189,22 @@ Base URL: `/api`
 | PUT | `/products/:id` | Admin | Update product |
 | DELETE | `/products/:id` | Admin | Delete product |
 
+### Cart
+
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| GET | `/cart` | Authenticated | Get current user's cart |
+| POST | `/cart` | Authenticated | Add a product to the cart |
+| PUT | `/cart/:id` | Authenticated | Update item quantity |
+| DELETE | `/cart` | Authenticated | Remove one item or clear cart |
+
+### Coupons
+
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| GET | `/coupons` | Authenticated | Get active user coupon |
+| POST | `/coupons/validate` | Authenticated | Validate a coupon code |
+
 ### Payments
 
 | Method | Endpoint | Access | Description |
@@ -208,23 +224,6 @@ Base URL: `/api`
 |---|---|---|---|
 | GET | `/health` | Public | Lightweight service health check |
 
-## Example API Request
-
-Create a product:
-
-```bash
-curl -X POST http://localhost:5000/api/products \
-  -H "Content-Type: application/json" \
-  -H "Cookie: accessToken=YOUR_TOKEN" \
-  -d '{
-    "name": "Classic Jacket",
-    "description": "Lightweight everyday jacket",
-    "price": 89.99,
-    "category": "Outerwear",
-    "image": "data:image/png;base64,..."
-  }'
-```
-
 ## Available Scripts
 
 ### Root
@@ -234,7 +233,7 @@ curl -X POST http://localhost:5000/api/products \
 | `npm run dev` | Start backend with Nodemon |
 | `npm run build` | Install dependencies and build frontend |
 | `npm start` | Start production Express server |
-| `npm test` | Run backend/unit and API integration tests once |
+| `npm test` | Run backend tests once |
 | `npm run test:watch` | Run backend tests in watch mode |
 
 ### Frontend
@@ -250,7 +249,7 @@ curl -X POST http://localhost:5000/api/products \
 
 ## Testing
 
-The repository now includes automated testing at both the backend and frontend layers.
+Priority 2.5 expands the automated suite across the application's security-sensitive and revenue-critical backend paths.
 
 ### Backend — Vitest + Supertest
 
@@ -260,15 +259,19 @@ Run:
 npm test
 ```
 
-Coverage currently includes:
+Coverage includes:
 
-- Express health endpoint integration testing.
-- Unknown API route behavior.
-- Product Mongoose schema validation.
-- Required product fields.
-- Negative-price validation.
+- Express health endpoint and unknown-route integration behavior.
+- Product Mongoose schema validation, required fields, and negative-price rejection.
+- Authentication middleware: missing, expired, invalid, and valid access-token paths.
+- Authorization middleware: customer denial and admin access.
+- Authentication controllers: signup, duplicate signup, login success/failure, refresh-token validation, token rotation, and logout cookie cleanup.
+- Product controllers: listing, lookup, category filtering, Redis-backed featured products, creation, and missing-product deletion.
+- Cart controllers: add, increment, remove-one, clear-all, quantity updates, zero-quantity removal, and cart hydration.
+- Coupon controllers: active lookup, missing codes, valid coupons, and expiration/deactivation.
+- Stripe checkout: invalid carts, line-item/cents calculation, session creation, and coupon discount handling.
 
-Supertest exercises the Express application without starting a real HTTP listener, while Vitest provides the test runner.
+External services are mocked in unit tests so the suite does not charge cards, upload files, mutate production Redis, or require live third-party credentials.
 
 ### Frontend — Vitest + React Testing Library
 
@@ -286,6 +289,8 @@ The current component test verifies that the home page renders its category cata
 npm run test:watch
 npm run test:watch --prefix frontend
 ```
+
+> The GitHub integration can modify and inspect repository files but cannot execute the repository's local npm test suite. Run the commands above locally or in CI to obtain the authoritative pass/fail result.
 
 ## Production Build
 
