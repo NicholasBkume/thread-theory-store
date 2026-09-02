@@ -16,13 +16,13 @@
   "description": "",
   "dependencies": {
     "bcryptjs": "^3.0.2",
-    "cloudinary": "^2.6.0",
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.5.0",
-    "express": "^4.18.2",
-    "ioredis": "^5.6.1",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.13.2",
+    "express": "^4.22.2",
+    "ioredis": "^6.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.24.4",
     "stripe": "^18.0.0"
   },
   "devDependencies": {
