@@ -7,6 +7,7 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 [![Stripe](https://img.shields.io/badge/Payments-Stripe-635BFF?logo=stripe&logoColor=white)](https://stripe.com/)
 [![Redis](https://img.shields.io/badge/Cache-Redis-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![CI](https://github.com/NicholasBkume/thread-theory-store/actions/workflows/ci.yml/badge.svg)](https://github.com/NicholasBkume/thread-theory-store/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-ISC-blue)](./package.json)
 
 ## Live Demo
@@ -30,7 +31,8 @@
 - Cloudinary-backed product image uploads.
 - Shopping cart and coupon workflows.
 - Stripe Checkout integration.
-- Order creation after successful payment verification.
+- Verified Stripe webhooks for server-side payment finalization.
+- Idempotent order creation keyed by Stripe Checkout Session ID.
 - Redis caching for featured products.
 - Admin analytics and seven-day sales reporting.
 - Responsive React UI with Tailwind CSS, Zustand, Framer Motion, and Recharts.
@@ -44,6 +46,8 @@
 **Data & Services:** MongoDB, Mongoose, Redis/ioredis, Stripe, Cloudinary
 
 **Testing:** Vitest, React Testing Library, jest-dom, User Event, Supertest
+
+**CI/CD:** GitHub Actions
 
 ## Architecture
 
@@ -62,6 +66,12 @@ Express API
    |---- Featured cache --------- Redis
    |---- Image uploads ---------- Cloudinary
    |---- Checkout --------------- Stripe
+   |                              |
+   |                              v
+   |                         Signed webhook
+   |                              |
+   |                              v
+   |                         Order finalization
    |---- Analytics
    v
 JSON responses
@@ -75,7 +85,9 @@ JSON responses
 4. MongoDB persists application data.
 5. Redis caches featured products.
 6. Cloudinary stores product images.
-7. Stripe creates checkout sessions and confirms payment state.
+7. Stripe creates Checkout sessions.
+8. Stripe sends a signed `checkout.session.completed` or async-payment-success event to `/api/payments/webhook`.
+9. The webhook verifies the signature using the raw request body and finalizes the order exactly once using the Stripe session ID.
 
 ## Prerequisites
 
@@ -119,6 +131,7 @@ REFRESH_TOKEN_SECRET=replace_with_a_long_random_secret
 CLIENT_URL=http://localhost:5173
 
 STRIPE_SECRET_KEY=your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_signing_secret
 
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
@@ -127,7 +140,7 @@ CLOUDINARY_API_SECRET=your_api_secret
 REDIS_URL=your_redis_connection_url
 ```
 
-> Verify the exact environment variable names in `backend/lib/` before deployment because service configuration should match the repository implementation.
+> `STRIPE_WEBHOOK_SECRET` must be the signing secret for the webhook endpoint configured in Stripe. It is different from `STRIPE_SECRET_KEY`.
 
 ### 4. Run locally
 
@@ -143,6 +156,33 @@ Frontend in another terminal:
 npm run dev --prefix frontend
 ```
 
+## Stripe Webhook Setup
+
+Configure a Stripe webhook endpoint pointing to:
+
+```text
+https://YOUR_API_HOST/api/payments/webhook
+```
+
+For local development, use the Stripe CLI to forward events to:
+
+```text
+http://localhost:5000/api/payments/webhook
+```
+
+Set the generated webhook signing secret as `STRIPE_WEBHOOK_SECRET`.
+
+The webhook endpoint intentionally receives the raw JSON body before Express's normal JSON parser. Stripe's signature verification is performed with `stripe.webhooks.constructEvent(...)`; requests with a missing or invalid signature are rejected with HTTP 400.
+
+Handled payment events:
+
+- `checkout.session.completed`
+- `checkout.session.async_payment_succeeded`
+
+Only sessions whose `payment_status` is `paid` are finalized. The finalizer first looks up `stripeSessionId`, so Stripe retries do not create duplicate orders. The `Order` model also enforces uniqueness on `stripeSessionId`.
+
+The existing `/api/payments/checkout-success` endpoint remains available for the storefront success-page flow, but it is idempotent and checks that the Checkout Session belongs to the authenticated user. The webhook is the authoritative server-side payment finalization mechanism.
+
 ## Environment Variables
 
 | Variable | Purpose | Required |
@@ -152,6 +192,7 @@ npm run dev --prefix frontend
 | `REFRESH_TOKEN_SECRET` | Refresh JWT signing secret | Yes |
 | `CLIENT_URL` | Frontend URL used by application/payment redirects | Yes |
 | `STRIPE_SECRET_KEY` | Stripe server credential | Yes |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature verification secret | Yes for webhooks |
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary account identifier | Yes for uploads |
 | `CLOUDINARY_API_KEY` | Cloudinary API credential | Yes for uploads |
 | `CLOUDINARY_API_SECRET` | Cloudinary API secret | Yes for uploads |
@@ -210,7 +251,8 @@ Base URL: `/api`
 | Method | Endpoint | Access | Description |
 |---|---|---|---|
 | POST | `/payments/create-checkout-session` | Authenticated | Create Stripe Checkout session |
-| POST | `/payments/checkout-success` | Authenticated | Verify successful checkout and create order |
+| POST | `/payments/checkout-success` | Authenticated | Verify successful checkout and create/reuse order |
+| POST | `/payments/webhook` | Stripe | Verify Stripe signature and finalize paid orders |
 
 ### Analytics
 
@@ -249,7 +291,7 @@ Base URL: `/api`
 
 ## Testing
 
-Priority 2.5 expands the automated suite across the application's security-sensitive and revenue-critical backend paths.
+Priority 2.5 and Priority 3 cover the application's security-sensitive and revenue-critical backend paths.
 
 ### Backend — Vitest + Supertest
 
@@ -261,7 +303,7 @@ npm test
 
 Coverage includes:
 
-- Express health endpoint and unknown-route integration behavior.
+- Express health endpoint and protected-route integration behavior.
 - Product Mongoose schema validation, required fields, and negative-price rejection.
 - Authentication middleware: missing, expired, invalid, and valid access-token paths.
 - Authorization middleware: customer denial and admin access.
@@ -270,6 +312,7 @@ Coverage includes:
 - Cart controllers: add, increment, remove-one, clear-all, quantity updates, zero-quantity removal, and cart hydration.
 - Coupon controllers: active lookup, missing codes, valid coupons, and expiration/deactivation.
 - Stripe checkout: invalid carts, line-item/cents calculation, session creation, and coupon discount handling.
+- Stripe webhook verification: missing signature, invalid signature, verified event acknowledgement, paid-session finalization, unpaid-session rejection, and idempotent duplicate-event handling.
 
 External services are mocked in unit tests so the suite does not charge cards, upload files, mutate production Redis, or require live third-party credentials.
 
@@ -283,14 +326,24 @@ npm test --prefix frontend
 
 The current component test verifies that the home page renders its category catalogue and featured-product section. React Testing Library runs against a `jsdom` browser environment, with `jest-dom` matchers enabled through the test setup file.
 
+### CI
+
+GitHub Actions runs the backend tests and frontend tests automatically on **every push** and **every pull request**. The frontend CI job also runs ESLint and a production build. The workflow uses Node.js 20 and non-production placeholder Stripe variables so tests do not require live payment credentials.
+
+Workflow file:
+
+```text
+.github/workflows/ci.yml
+```
+
+> The GitHub integration can modify and inspect repository files but cannot execute the repository's local npm test suite. The CI workflow is the authoritative automated pass/fail environment after GitHub starts a run.
+
 ### Watch mode
 
 ```bash
 npm run test:watch
 npm run test:watch --prefix frontend
 ```
-
-> The GitHub integration can modify and inspect repository files but cannot execute the repository's local npm test suite. Run the commands above locally or in CI to obtain the authoritative pass/fail result.
 
 ## Production Build
 
@@ -308,15 +361,17 @@ The application is structured for deployment as a Node.js service. Configure all
 Recommended production workflow:
 
 ```text
-Git push
+Git push / Pull request
+   ↓
+GitHub Actions
    ↓
 Install dependencies
    ↓
-Lint
-   ↓
-Automated tests
+Lint + automated tests
    ↓
 Build frontend
+   ↓
+Review / merge
    ↓
 Deploy
 ```
@@ -325,9 +380,13 @@ Deploy
 
 - Keep JWT, Stripe, Cloudinary, MongoDB, and Redis credentials private.
 - Use HTTPS in production.
+- Configure `STRIPE_WEBHOOK_SECRET` from the Stripe Dashboard or Stripe CLI; never use the publishable key for webhook verification.
+- Preserve Stripe's raw request body for signature verification.
+- Treat Stripe webhooks, not the browser redirect, as the authoritative payment confirmation.
+- Use the unique `stripeSessionId` order key to prevent duplicate orders on webhook retries.
 - Restrict administrator privileges.
 - Validate request payloads before persistence.
-- For production payments, add Stripe webhook signature verification so orders can be finalized independently of the browser success redirect.
+- Validate product identity and server-side pricing before creating production checkout sessions.
 
 ## Monitoring Roadmap
 
@@ -338,6 +397,7 @@ Recommended production improvements:
 - Error tracking service
 - Uptime monitoring
 - Performance metrics
+- Stripe webhook failure alerting
 
 ## Contributing
 
