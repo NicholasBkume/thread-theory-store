@@ -55,7 +55,7 @@ describe("Stripe webhook and order finalization", () => {
     };
 
     it("rejects requests without a Stripe signature", async () => {
-        const req = { headers: {}, body: Buffer.from("{}");
+        const req = { headers: {}, body: Buffer.from("{}") };
         const res = {
             status: vi.fn().mockReturnThis(),
             json: vi.fn().mockReturnThis(),
