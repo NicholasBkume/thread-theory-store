@@ -34,6 +34,8 @@ vi.mock("../backend/models/coupon.model.js", () => ({
 }));
 vi.mock("../backend/models/order.model.js", () => ({
     default: vi.fn().mockImplementation((data) => ({ ...data, save: orderSave })),
+    create: orderSave,
+    findOne: vi.fn(),
 }));
 vi.mock("../backend/lib/redis.js", () => ({
     redis: { get: redisGet, set: redisSet, del: redisDel },
@@ -300,6 +302,14 @@ describe("coupon controllers", () => {
 });
 
 describe("Stripe checkout controller", () => {
+    const dbProduct = (overrides = {}) => ({
+        _id: "p1",
+        name: "Jacket",
+        price: 25.5,
+        image: "image.jpg",
+        ...overrides,
+    });
+
     it("rejects an empty products array", async () => {
         const res = response();
 
@@ -310,21 +320,32 @@ describe("Stripe checkout controller", () => {
         expect(stripeCheckoutCreate).not.toHaveBeenCalled();
     });
 
-    it("creates a checkout session with calculated line items", async () => {
+    it("creates a checkout session using the database price instead of the client price", async () => {
+        productFind.mockResolvedValue([dbProduct()]);
         const res = response();
         const req = {
             body: {
-                products: [{ _id: "p1", name: "Jacket", price: 25.5, image: "image.jpg", quantity: 2 }],
+                products: [{ _id: "69a1b2c3d4e5f67890123456", name: "Forged Name", price: 0.01, image: "forged.jpg", quantity: 2 }],
             },
             user: { _id: "u1" },
         };
 
         await createCheckoutSession(req, res);
 
+        expect(productFind).toHaveBeenCalledWith({ _id: { $in: ["69a1b2c3d4e5f67890123456"] } });
         expect(stripeCheckoutCreate).toHaveBeenCalledWith(expect.objectContaining({
             mode: "payment",
-            line_items: [expect.objectContaining({ quantity: 2, price_data: expect.objectContaining({ unit_amount: 2550 }) })],
-            metadata: expect.objectContaining({ userId: "u1" }),
+            line_items: [expect.objectContaining({
+                quantity: 2,
+                price_data: expect.objectContaining({
+                    product_data: expect.objectContaining({ name: "Jacket", images: ["image.jpg"] }),
+                    unit_amount: 2550,
+                }),
+            })],
+            metadata: expect.objectContaining({
+                userId: "u1",
+                products: JSON.stringify([{ id: "69a1b2c3d4e5f67890123456", quantity: 2, price: 25.5 }]),
+            }),
         }));
         expect(res.status).toHaveBeenCalledWith(200);
         expect(res.json).toHaveBeenCalledWith({
@@ -334,12 +355,41 @@ describe("Stripe checkout controller", () => {
         });
     });
 
-    it("applies a valid coupon to the checkout total", async () => {
-        couponFindOne.mockResolvedValue({ discountPercentage: 10 });
+    it("rejects a product that does not exist in the database", async () => {
+        productFind.mockResolvedValue([]);
         const res = response();
 
         await createCheckoutSession({
-            body: { products: [{ _id: "p1", name: "Jacket", price: 100, image: "image.jpg", quantity: 1 }], couponCode: "SAVE10" },
+            body: { products: [{ _id: "69a1b2c3d4e5f67890123456", price: 100, quantity: 1 }] },
+            user: { _id: "u1" },
+        }, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ message: "One or more products are no longer available" });
+        expect(stripeCheckoutCreate).not.toHaveBeenCalled();
+    });
+
+    it("rejects invalid quantities", async () => {
+        const res = response();
+
+        await createCheckoutSession({
+            body: { products: [{ _id: "69a1b2c3d4e5f67890123456", quantity: 0 }] },
+            user: { _id: "u1" },
+        }, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith({ message: "Invalid product quantity" });
+        expect(productFind).not.toHaveBeenCalled();
+        expect(stripeCheckoutCreate).not.toHaveBeenCalled();
+    });
+
+    it("applies a valid coupon to the server-calculated checkout total", async () => {
+        productFind.mockResolvedValue([dbProduct({ price: 100 })]);
+        couponFindOne.mockResolvedValue({ discountPercentage: 10, code: "SAVE10" });
+        const res = response();
+
+        await createCheckoutSession({
+            body: { products: [{ _id: "69a1b2c3d4e5f67890123456", price: 1, quantity: 1 }], couponCode: "SAVE10" },
             user: { _id: "u1" },
         }, res);
 
