@@ -1,38 +1,5 @@
-import mongoose from "mongoose";
-import bcrypt from "bcryptjs";
-
-const addressSchema = new mongoose.Schema({
-    label: { type: String, trim: true, default: "Address" },
-    name: { type: String, trim: true, required: true },
-    line1: { type: String, trim: true, required: true },
-    line2: { type: String, trim: true },
-    city: { type: String, trim: true, required: true },
-    state: { type: String, trim: true, required: true },
-    postalCode: { type: String, trim: true, required: true },
-    country: { type: String, trim: true, required: true, default: "US" },
-    phone: { type: String, trim: true },
-    isDefault: { type: Boolean, default: false },
-}, { _id: true });
-
-const userSchema = new mongoose.Schema({
-    name: { type: String, required: [true, "Name is required"], trim: true },
-    email: { type: String, required: [true, "Email is required"], unique: true, lowercase: true, trim: true },
-    password: { type: String, required: [true, "Password is required"], minlength: [6, "Password must be at least 6 characters long"] },
-    cartItems: [{ quantity: { type: Number, default: 1, min: 1 }, product: { type: mongoose.Schema.Types.ObjectId, ref: "Product" } }],
-    wishlist: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
-    addresses: { type: [addressSchema], default: [] },
-    role: { type: String, enum: ["customer", "admin"], default: "customer" },
-}, { timestamps: true });
-
-userSchema.pre("save", async function (next) {
-    if (!this.isModified("password")) return next();
-    try {
-        const salt = await bcrypt.genSalt(10);
-        this.password = await bcrypt.hash(this.password, salt);
-        next();
-    } catch (err) { next(err); }
-});
-
-userSchema.methods.comparePassword = async function (password) { return bcrypt.compare(password, this.password); };
-const User = mongoose.model("User", userSchema);
-export default User;
+import mongoose from "mongoose";import bcrypt from "bcryptjs";
+const addressSchema=new mongoose.Schema({label:{type:String,trim:true,default:"Address"},name:{type:String,trim:true,required:true},line1:{type:String,trim:true,required:true},line2:{type:String,trim:true},city:{type:String,trim:true,required:true},state:{type:String,trim:true,required:true},postalCode:{type:String,trim:true,required:true},country:{type:String,trim:true,required:true,default:"US"},phone:{type:String,trim:true},isDefault:{type:Boolean,default:false}},{_id:true});
+const cartItemSchema=new mongoose.Schema({quantity:{type:Number,default:1,min:1,max:100},product:{type:mongoose.Schema.Types.ObjectId,ref:"Product",required:true},variantId:{type:mongoose.Schema.Types.ObjectId}},{_id:false});
+const userSchema=new mongoose.Schema({name:{type:String,required:[true,"Name is required"],trim:true},email:{type:String,required:[true,"Email is required"],unique:true,lowercase:true,trim:true},password:{type:String,required:[true,"Password is required"],minlength:[6,"Password must be at least 6 characters long"]},cartItems:{type:[cartItemSchema],default:[]},wishlist:[{type:mongoose.Schema.Types.ObjectId,ref:"Product"}],addresses:{type:[addressSchema],default:[]},role:{type:String,enum:["customer","admin"],default:"customer"}},{timestamps:true});
+userSchema.pre("save",async function(next){if(!this.isModified("password"))return next();try{const salt=await bcrypt.genSalt(10);this.password=await bcrypt.hash(this.password,salt);next();}catch(err){next(err);}});userSchema.methods.comparePassword=async function(password){return bcrypt.compare(password,this.password);};export default mongoose.model("User",userSchema);
