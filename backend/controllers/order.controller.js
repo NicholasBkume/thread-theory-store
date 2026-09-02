@@ -27,12 +27,12 @@ export const updateOrderStatus = async (req, res) => {
         if (trackingNumber !== undefined) order.trackingNumber = trackingNumber?.trim();
         if (carrier !== undefined) order.carrier = carrier?.trim();
         if (status === "refunded" && order.paymentStatus !== "refunded") await refundOrderPayment(order);
-        if (status === "cancelled" && order.status !== "cancelled") await restoreOrderStock(order);
+        if (status === "cancelled" && !order.stockRestoredAt) await restoreOrderStock(order);
         order.status = status;
         if (status === "shipped") order.shippedAt = new Date();
         if (status === "delivered") order.deliveredAt = new Date();
         if (status === "cancelled") order.cancelledAt = new Date();
-        if (status === "refunded") { order.refundedAt = new Date(); order.paymentStatus = "refunded"; }
+        if (status === "refunded") { order.refundedAt = order.refundedAt || new Date(); order.paymentStatus = "refunded"; }
         await order.save();
         await order.populate("user", "name email");
         await order.populate("products.product", "name image");
@@ -47,7 +47,7 @@ export const cancelMyOrder = async (req, res) => {
         if (!order) return res.status(404).json({ message: "Order not found" });
         if (order.status !== "processing") return res.status(400).json({ message: "Only processing orders can be cancelled" });
         if (order.paymentStatus === "paid") await refundOrderPayment(order);
-        await restoreOrderStock(order);
+        if (!order.stockRestoredAt) await restoreOrderStock(order);
         order.status = "cancelled";
         order.cancelledAt = new Date();
         order.paymentStatus = order.paymentStatus === "paid" ? "refunded" : order.paymentStatus;
@@ -57,14 +57,30 @@ export const cancelMyOrder = async (req, res) => {
 };
 
 async function restoreOrderStock(order) {
-    for (const item of order.products) if (item.product) await Product.findByIdAndUpdate(item.product, { $inc: { stock: item.quantity } });
+    if (order.stockRestoredAt) return;
+    for (const item of order.products) {
+        if (!item.product) continue;
+        if (item.variantId) {
+            await Product.findOneAndUpdate({ _id: item.product, "variants._id": item.variantId }, { $inc: { "variants.$.stock": item.quantity } });
+        } else {
+            await Product.findByIdAndUpdate(item.product, { $inc: { stock: item.quantity } });
+        }
+    }
+    order.stockRestoredAt = new Date();
 }
 
 async function refundOrderPayment(order) {
+    if (order.paymentStatus === "refunded" && order.refundId) return order.refundId;
+    if (order.refundId) return order.refundId;
     if (!order.stripeSessionId) throw new Error("This order has no Stripe payment session");
     if (!process.env.STRIPE_SECRET_KEY) throw new Error("Stripe is not configured on the server");
     const session = await stripe.checkout.sessions.retrieve(order.stripeSessionId);
     const paymentIntent = session.payment_intent;
     if (!paymentIntent) throw new Error("Stripe payment intent is unavailable for this order");
-    await stripe.refunds.create({ payment_intent: paymentIntent });
+    const existing = await stripe.refunds.list({ payment_intent: paymentIntent, limit: 10 });
+    const priorRefund = existing.data.find((refund) => ["pending", "succeeded"].includes(refund.status));
+    const refund = priorRefund || await stripe.refunds.create({ payment_intent: paymentIntent });
+    order.refundId = refund.id;
+    if (refund.status === "succeeded") order.paymentStatus = "refunded";
+    return refund.id;
 }
