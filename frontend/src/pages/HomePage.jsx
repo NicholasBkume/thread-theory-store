@@ -1,66 +1,14 @@
 import { useEffect } from "react";
+import { Link } from "react-router-dom";
 import CategoryItem from "../components/CategoryItem";
 import { useProductStore } from "../stores/useProductStore";
 import FeaturedProducts from "../components/FeaturedProducts";
 
 const categories = [
-	{ href: "/jeans", name: "Jeans", imageUrl: "/jeans.jpg" },
-	{ href: "/t-shirts", name: "T-shirts", imageUrl: "/tshirts.jpg" },
-	{ href: "/shoes", name: "Shoes", imageUrl: "/shoes.jpg" },
-	{ href: "/glasses", name: "Glasses", imageUrl: "/glasses.png" },
-	{ href: "/jackets", name: "Jackets", imageUrl: "/jackets.jpg" },
-	{ href: "/suits", name: "Suits", imageUrl: "/suits.jpg" },
-	{ href: "/bags", name: "Bags", imageUrl: "/bags.jpg" },
+    { href: "/jeans", name: "Jeans", imageUrl: "/jeans.jpg" }, { href: "/t-shirts", name: "T-shirts", imageUrl: "/tshirts.jpg" }, { href: "/shoes", name: "Shoes", imageUrl: "/shoes.jpg" }, { href: "/glasses", name: "Glasses", imageUrl: "/glasses.png" }, { href: "/jackets", name: "Jackets", imageUrl: "/jackets.jpg" }, { href: "/suits", name: "Suits", imageUrl: "/suits.jpg" }, { href: "/bags", name: "Bags", imageUrl: "/bags.jpg" },
 ];
-
-const HomePage = () => {
-	const { fetchFeaturedProducts, products, isLoading } = useProductStore();
-
-	useEffect(() => {
-		fetchFeaturedProducts();
-	}, [fetchFeaturedProducts]);
-
-	return (
-		<div className='relative min-h-screen text-white overflow-hidden'>
-			<div className='relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16'>
-				<h1 className='text-center text-5xl sm:text-6xl font-bold text-yellow-400 mb-4'>
-					Explore Our Categories
-				</h1>
-				<p className='text-center text-xl text-stone-300 mb-12'>
-					Discover the latest trends in mens fashion
-				</p>
-
-				<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
-					{categories.map((category) => (
-						<CategoryItem category={category} key={category.name} />
-					))}
-				</div>
-
-				{!isLoading && products.length > 0 && <FeaturedProducts featuredProducts={products} />}
-			</div>
-			<div className='mt-16 text-center'>
-	<h2 className='text-center text-5xl sm:text-6xl font-bold text-yellow-400 mb-4'>What Our Customers Say</h2>
-	<div className='grid sm:grid-cols-2 lg:grid-cols-3 gap-6 text-stone-200'>
-		<div className='bg-stone-800 p-6 rounded-xl shadow-lg'>
-			<p>"Finally found a store that gets my style. The quality is top-notch and the fit is perfect."</p>
-			<img className= 'sm:px-30 rounded-full mx-auto' src="YN1.png" alt="" />
-			<p className='mt-2 font-semibold text-yellow-300'>– Mike D.</p>
-		</div>
-		<div className='bg-stone-800 p-6 rounded-xl shadow-lg'>
-			<p>"Delivery was fast, and the packaging was slick. I felt like I was opening something luxury."</p>
-			<img className= 'sm:px-30 rounded-full mx-auto' src="YN2.png" alt="" />
-			<p className='mt-2 font-semibold text-yellow-300'>– James H.</p>
-		</div>
-		<div className='bg-stone-800 p-6 rounded-xl shadow-lg'>
-			<p>"Stylish, sustainable, and worth every penny."</p>
-			<img className= 'sm:px-30 rounded-full mx-auto' src="YN3.png" alt="" />
-			<p className='mt-2 font-semibold text-yellow-300'>– Eric W.</p>
-		</div>
-	</div>
-</div>
-			
-		</div>
-		
-	);
-};
-export default HomePage;
+export default function HomePage() {
+    const { fetchFeaturedProducts, products, loading } = useProductStore();
+    useEffect(() => { fetchFeaturedProducts(); }, [fetchFeaturedProducts]);
+    return <div className="relative min-h-screen overflow-hidden text-white"><div className="relative z-10 mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8"><div className="mb-10 text-center"><p className="text-sm uppercase tracking-[0.3em] text-yellow-400">Thread Theory</p><h1 className="mt-2 text-5xl font-bold sm:text-6xl">Explore Our Categories</h1><p className="mt-4 text-xl text-stone-300">Discover the latest trends in men’s fashion.</p><div className="mt-6 flex justify-center gap-3"><Link to="/shop" className="rounded-md bg-yellow-600 px-5 py-3 font-semibold text-black hover:bg-yellow-500">Shop all products</Link><Link to="/search" className="rounded-md border border-stone-600 px-5 py-3 font-semibold hover:border-yellow-400 hover:text-yellow-400">Search</Link></div></div><div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{categories.map((category) => <CategoryItem category={category} key={category.name}/>)}</div>{!loading && products.length > 0 && <FeaturedProducts featuredProducts={products}/>}<section className="mt-12"><h2 className="mb-6 text-center text-4xl font-bold text-yellow-400 sm:text-5xl">What Our Customers Say</h2><div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"><div className="rounded-xl bg-stone-800 p-6 text-center"><p>“Finally found a store that gets my style. The quality is top-notch and the fit is perfect.”</p><img className="mx-auto mt-5 h-20 w-20 rounded-full object-cover" src="YN1.png" alt="Customer testimonial"/><p className="mt-2 font-semibold text-yellow-300">– Mike D.</p></div><div className="rounded-xl bg-stone-800 p-6 text-center"><p>“Delivery was fast, and the packaging was slick. I felt like I was opening something luxury.”</p><img className="mx-auto mt-5 h-20 w-20 rounded-full object-cover" src="YN2.png" alt="Customer testimonial"/><p className="mt-2 font-semibold text-yellow-300">– James H.</p></div><div className="rounded-xl bg-stone-800 p-6 text-center"><p>“Stylish, sustainable, and worth every penny.”</p><img className="mx-auto mt-5 h-20 w-20 rounded-full object-cover" src="YN3.png" alt="Customer testimonial"/><p className="mt-2 font-semibold text-yellow-300">– Eric W.</p></div></div></section></div></div>;
+}
