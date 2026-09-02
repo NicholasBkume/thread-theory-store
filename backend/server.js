@@ -21,6 +21,10 @@ const __dirname = path.resolve();
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 
+app.get("/api/health", (_req, res) => {
+    res.status(200).json({ status: "ok" });
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/cart", cartRoutes);
@@ -35,7 +39,6 @@ if (process.env.NODE_ENV === "production") {
     });
 }
 
-// Only start the listener when this module is executed by the production/dev server.
 if (process.env.NODE_ENV !== "test") {
     app.listen(PORT, () => {
         console.log("Server is running on http://localhost:" + PORT);
