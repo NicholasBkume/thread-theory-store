@@ -102,6 +102,9 @@ export const createCheckoutSession = async (req, res) => {
     }
 };
 
+// Kept for the existing success-page flow. The webhook is the authoritative
+// payment finalization path; this endpoint is idempotent and only accepts a
+// session belonging to the authenticated user.
 export const checkoutSuccess = async (req, res) => {
     try {
         const { sessionId } = req.body;
@@ -110,8 +113,11 @@ export const checkoutSuccess = async (req, res) => {
         }
 
         const session = await stripe.checkout.sessions.retrieve(sessionId);
-        const order = await finalizePaidCheckout(session);
+        if (session.metadata?.userId !== req.user._id.toString()) {
+            return res.status(403).json({ message: "Checkout session does not belong to the current user." });
+        }
 
+        const order = await finalizePaidCheckout(session);
         if (!order) {
             return res.status(400).json({ message: "Payment has not been completed." });
         }
