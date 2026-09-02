@@ -2,9 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
@@ -55,6 +53,9 @@ jobs:
 
       - name: Run frontend tests
         run: npm test
+
+      - name: Run frontend lint
+        run: npm run lint
 
       - name: Build frontend
         run: npm run build
