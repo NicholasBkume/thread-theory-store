@@ -1,12 +1,8 @@
 import express from "express";
 import { adminRoute, protectRoute } from "../middleware/auth.middleware.js";
-import { createContactMessage, getContactMessages, subscribe, unsubscribe, getSubscribers, updateSubscriberStatus, updateContactStatus } from "../controllers/support.controller.js";
+import { createContactMessage, getContactMessages, subscribe, unsubscribe, getSubscribers, updateSubscriberStatus, updateContactStatus, sendNewsletter } from "../controllers/support.controller.js";
 const router = express.Router();
-router.post("/subscribe", subscribe);
-router.get("/unsubscribe", unsubscribe);
-router.post("/contact", createContactMessage);
-router.get("/contact", protectRoute, adminRoute, getContactMessages);
-router.patch("/contact/:id", protectRoute, adminRoute, updateContactStatus);
-router.get("/subscribers", protectRoute, adminRoute, getSubscribers);
-router.patch("/subscribers/:id", protectRoute, adminRoute, updateSubscriberStatus);
+router.post("/subscribe", subscribe); router.get("/unsubscribe", unsubscribe); router.post("/contact", createContactMessage);
+router.get("/contact", protectRoute, adminRoute, getContactMessages); router.patch("/contact/:id", protectRoute, adminRoute, updateContactStatus);
+router.get("/subscribers", protectRoute, adminRoute, getSubscribers); router.patch("/subscribers/:id", protectRoute, adminRoute, updateSubscriberStatus); router.post("/newsletter/send", protectRoute, adminRoute, sendNewsletter);
 export default router;
