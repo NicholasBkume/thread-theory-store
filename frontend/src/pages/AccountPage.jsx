@@ -1,0 +1,75 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { Heart, MapPin, Trash2, UserRound } from "lucide-react";
+import axios from "../lib/axios";
+import { toast } from "react-hot-toast";
+import { useUserStore } from "../stores/useUserStore";
+
+const emptyAddress = { label: "Home", name: "", line1: "", line2: "", city: "", state: "", postalCode: "", country: "US", phone: "", isDefault: false };
+
+const AccountPage = () => {
+    const { user, checkAuth } = useUserStore();
+    const [name, setName] = useState(user?.name || "");
+    const [addresses, setAddresses] = useState(user?.addresses || []);
+    const [wishlist, setWishlist] = useState([]);
+    const [address, setAddress] = useState(emptyAddress);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => { setName(user?.name || ""); setAddresses(user?.addresses || []); }, [user]);
+    useEffect(() => {
+        axios.get("/account/wishlist").then((res) => setWishlist(res.data.products || [])).catch(() => {});
+    }, []);
+
+    const saveProfile = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        try { await axios.patch("/account/profile", { name }); await checkAuth(); toast.success("Profile updated"); }
+        catch (error) { toast.error(error.response?.data?.message || "Unable to update profile"); }
+        finally { setSaving(false); }
+    };
+
+    const saveAddress = async (e) => {
+        e.preventDefault();
+        try { const res = await axios.post("/account/addresses", address); setAddresses(res.data.addresses); setAddress(emptyAddress); toast.success("Address saved"); }
+        catch (error) { toast.error(error.response?.data?.message || "Unable to save address"); }
+    };
+
+    const removeAddress = async (id) => {
+        try { const res = await axios.delete(`/account/addresses/${id}`); setAddresses(res.data.addresses); }
+        catch (error) { toast.error(error.response?.data?.message || "Unable to remove address"); }
+    };
+
+    const removeWishlist = async (id) => {
+        try { await axios.patch(`/account/wishlist/${id}`); setWishlist((items) => items.filter((p) => p._id !== id)); }
+        catch (error) { toast.error(error.response?.data?.message || "Unable to update wishlist"); }
+    };
+
+    return <main className='mx-auto max-w-6xl px-4 py-10'>
+        <div className='mb-8'><h1 className='text-3xl font-bold text-yellow-400'>My Account</h1><p className='text-stone-400'>Manage your profile, addresses, and wishlist.</p></div>
+        <div className='grid gap-6 lg:grid-cols-2'>
+            <section className='rounded-lg border border-stone-700 bg-stone-800 p-6'>
+                <h2 className='mb-5 flex items-center gap-2 text-xl font-semibold'><UserRound size={20}/> Profile</h2>
+                <form onSubmit={saveProfile} className='space-y-4'>
+                    <label className='block text-sm text-stone-300'>Name<input value={name} onChange={(e) => setName(e.target.value)} className='mt-1 w-full rounded-md border border-stone-600 bg-stone-700 px-3 py-2 text-white' required /></label>
+                    <label className='block text-sm text-stone-300'>Email<input value={user?.email || ""} readOnly className='mt-1 w-full rounded-md border border-stone-600 bg-stone-700 px-3 py-2 text-stone-400' /></label>
+                    <button disabled={saving} className='rounded-md bg-yellow-600 px-4 py-2 font-medium hover:bg-yellow-700 disabled:opacity-50'>{saving ? "Saving..." : "Save profile"}</button>
+                </form>
+            </section>
+            <section className='rounded-lg border border-stone-700 bg-stone-800 p-6'>
+                <h2 className='mb-5 flex items-center gap-2 text-xl font-semibold'><MapPin size={20}/> Saved addresses</h2>
+                <div className='space-y-3'>{addresses.map((a) => <div key={a._id} className='rounded border border-stone-700 p-3'><div className='flex justify-between'><strong>{a.label}{a.isDefault ? " · Default" : ""}</strong><button onClick={() => removeAddress(a._id)} aria-label='Delete address' className='text-red-400'><Trash2 size={17}/></button></div><p className='text-sm text-stone-300'>{a.name}<br/>{a.line1}{a.line2 ? `, ${a.line2}` : ""}<br/>{a.city}, {a.state} {a.postalCode}, {a.country}</p></div>)}</div>
+                <form onSubmit={saveAddress} className='mt-5 grid gap-3 sm:grid-cols-2'>
+                    {[["name","Full name"],["line1","Address"],["line2","Apartment / suite"],["city","City"],["state","State"],["postalCode","ZIP code"],["phone","Phone"]].map(([key,label]) => <input key={key} placeholder={label} value={address[key]} onChange={(e) => setAddress({...address,[key]:e.target.value})} required={!['line2','phone'].includes(key)} className='rounded-md border border-stone-600 bg-stone-700 px-3 py-2 text-white' />)}
+                    <label className='flex items-center gap-2 text-sm text-stone-300'><input type='checkbox' checked={address.isDefault} onChange={(e) => setAddress({...address,isDefault:e.target.checked})}/> Make default</label>
+                    <button className='rounded-md bg-yellow-600 px-4 py-2 font-medium hover:bg-yellow-700'>Add address</button>
+                </form>
+            </section>
+        </div>
+        <section className='mt-6 rounded-lg border border-stone-700 bg-stone-800 p-6'>
+            <h2 className='mb-5 flex items-center gap-2 text-xl font-semibold'><Heart size={20}/> Wishlist</h2>
+            {wishlist.length === 0 ? <p className='text-stone-400'>Your wishlist is empty.</p> : <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>{wishlist.map((product) => <div key={product._id} className='overflow-hidden rounded-lg border border-stone-700'><img src={product.image} alt={product.name} className='h-40 w-full object-cover'/><div className='p-3'><h3 className='font-semibold'>{product.name}</h3><p className='text-yellow-400'>${Number(product.price).toFixed(2)}</p><button onClick={() => removeWishlist(product._id)} className='mt-2 text-sm text-red-400'>Remove</button></div></div>)}</div>}
+            <Link to='/orders' className='mt-5 inline-block text-yellow-400 underline'>View my orders</Link>
+        </section>
+    </main>;
+};
+export default AccountPage;
