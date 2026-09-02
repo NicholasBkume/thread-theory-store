@@ -9,6 +9,7 @@ import cartRoutes from "./routes/cart.route.js";
 import couponRoutes from "./routes/coupon.route.js";
 import paymentRoutes from "./routes/payment.route.js";
 import analyticsRoutes from "./routes/analytics.route.js";
+import orderRoutes from "./routes/order.route.js";
 import { stripeWebhook } from "./controllers/payment.controller.js";
 import { notFoundHandler, errorHandler } from "./middleware/error.middleware.js";
 import { apiRateLimit, corsPolicy, securityHeaders } from "./middleware/security.middleware.js";
@@ -26,7 +27,6 @@ app.set("trust proxy", process.env.TRUST_PROXY === "true" ? 1 : false);
 app.use(securityHeaders);
 app.use(corsPolicy);
 
-// Stripe requires the unparsed request body for webhook signature verification.
 app.post("/api/payments/webhook", express.raw({ type: "application/json" }), stripeWebhook);
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
@@ -41,6 +41,7 @@ app.use("/api/cart", apiRateLimit({ max: 120, keyPrefix: "cart" }), cartRoutes);
 app.use("/api/coupons", apiRateLimit({ max: 60, keyPrefix: "coupons" }), couponRoutes);
 app.use("/api/payments", apiRateLimit({ max: 30, keyPrefix: "payments" }), paymentRoutes);
 app.use("/api/analytics", apiRateLimit({ max: 60, keyPrefix: "analytics" }), analyticsRoutes);
+app.use("/api/orders", apiRateLimit({ max: 60, keyPrefix: "orders" }), orderRoutes);
 
 if (process.env.NODE_ENV === "production") {
     app.use(express.static(path.join(__dirname, "/frontend/dist")));
