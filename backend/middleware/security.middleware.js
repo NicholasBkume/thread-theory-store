@@ -16,6 +16,31 @@ export const securityHeaders = (_req, res, next) => {
     next();
 };
 
+export const corsPolicy = (req, res, next) => {
+    const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+    const origin = req.headers.origin;
+
+    if (origin && allowedOrigins.includes(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+        res.setHeader("Vary", "Origin");
+    }
+
+    if (req.method === "OPTIONS") {
+        if (origin && !allowedOrigins.includes(origin)) {
+            return res.status(403).json({ message: "CORS origin not allowed" });
+        }
+        res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        return res.status(204).end();
+    }
+
+    next();
+};
+
 export const apiRateLimit = ({ windowMs = 15 * 60 * 1000, max = 100, keyPrefix = "api" } = {}) => (req, res, next) => {
     const now = Date.now();
     const key = getClientKey(req, keyPrefix);
