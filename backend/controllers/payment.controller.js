@@ -20,30 +20,21 @@ export const createCheckoutSession = async (req, res) => {
         const address = normalizeAddress(shippingAddress);
         if (!address) return res.status(400).json({ message: "Shipping address is required" });
         const requestedProducts = products.map((product) => {
-            const productId = product?._id || product?.id;
-            const quantity = Number(product?.quantity);
+            const productId = product?._id || product?.id; const quantity = Number(product?.quantity);
             if (!productId || !mongoose.isValidObjectId(productId)) throw new Error("Invalid product id");
             if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) throw new Error("Invalid product quantity");
             return { productId: productId.toString(), quantity };
         });
         const quantityByProduct = new Map();
         for (const item of requestedProducts) quantityByProduct.set(item.productId, (quantityByProduct.get(item.productId) || 0) + item.quantity);
-        const ids = [...quantityByProduct.keys()];
-        const databaseProducts = await Product.find({ _id: { $in: ids } });
+        const ids = [...quantityByProduct.keys()]; const databaseProducts = await Product.find({ _id: { $in: ids } });
         const productMap = new Map(databaseProducts.map((product) => [product._id.toString(), product]));
         if (productMap.size !== ids.length) throw new Error("One or more products are no longer available");
         for (const [id, quantity] of quantityByProduct) { const product = productMap.get(id); if (quantity > product.stock) throw new Error(`Insufficient stock for ${product.name}`); }
-        const lineItems = requestedProducts.map(({ productId, quantity }) => { const product = productMap.get(productId); return { price_data: { currency: "usd", product_data: { name: product.name }, unit_amount: Math.round(Number(product.price) * 100) }, quantity }; });
-        let totalAmount = lineItems.reduce((sum, item) => sum + item.price_data.unit_amount * item.quantity, 0);
-        let coupon = null;
+        const lineItems = requestedProducts.map(({ productId, quantity }) => { const product = productMap.get(productId); const price = Number(product.price); if (!Number.isFinite(price) || price <= 0) throw new Error(`Product ${productId} has an invalid price`); return { price_data: { currency: "usd", product_data: { name: product.name }, unit_amount: Math.round(price * 100) }, quantity }; });
+        let totalAmount = lineItems.reduce((sum, item) => sum + item.price_data.unit_amount * item.quantity, 0); let coupon = null;
         if (couponCode) { coupon = await Coupon.findOne({ code: couponCode, userId: req.user._id, isActive: true }); if (coupon) totalAmount -= Math.round((totalAmount * coupon.discountPercentage) / 100); }
-        const sessionParams = {
-            payment_method_types: ["card"], line_items: lineItems, mode: "payment",
-            success_url: `${clientUrl}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${clientUrl}/purchase-cancel`,
-            shipping_address_collection: { allowed_countries: [address.country.toUpperCase() || "US"] },
-            metadata: { userId: req.user._id.toString(), couponCode: coupon?.code || "", shippingAddress: JSON.stringify(address), products: JSON.stringify(requestedProducts.map(({ productId, quantity }) => ({ id: productId, quantity, price: productMap.get(productId).price }))) }
-        };
+        const sessionParams = { payment_method_types: ["card"], line_items: lineItems, mode: "payment", success_url: `${clientUrl}/purchase-success?session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${clientUrl}/purchase-cancel`, shipping_address_collection: { allowed_countries: [address.country.toUpperCase()] }, metadata: { userId: req.user._id.toString(), couponCode: coupon?.code || "", shippingAddress: JSON.stringify(address), products: JSON.stringify(requestedProducts.map(({ productId, quantity }) => ({ id: productId, quantity, price: productMap.get(productId).price }))) } };
         if (coupon) sessionParams.discounts = [{ coupon: await createStripeCoupon(coupon.discountPercentage) }];
         const session = await stripe.checkout.sessions.create(sessionParams);
         return res.status(200).json({ id: session.id, url: session.url, totalAmount: totalAmount / 100 });
@@ -60,8 +51,7 @@ export const stripeWebhook = async (req, res) => {
     if (!process.env.STRIPE_WEBHOOK_SECRET) return res.status(500).json({ message: "Stripe webhook is not configured on the server." });
     if (!signature) return res.status(400).json({ message: "Missing Stripe signature" });
     let event; try { event = stripe.webhooks.constructEvent(req.body, signature, process.env.STRIPE_WEBHOOK_SECRET); } catch { return res.status(400).json({ message: "Invalid Stripe webhook signature" }); }
-    try { if (["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type)) await finalizePaidCheckout(event.data.object); return res.status(200).json({ received: true }); }
-    catch (error) { console.error("Error processing Stripe webhook:", error); return res.status(500).json({ message: "Webhook processing failed" }); }
+    try { if (["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type)) await finalizePaidCheckout(event.data.object); return res.status(200).json({ received: true }); } catch (error) { console.error("Error processing Stripe webhook:", error); return res.status(500).json({ message: "Webhook processing failed" }); }
 };
 
 export async function finalizePaidCheckout(session) {
@@ -76,6 +66,7 @@ export async function finalizePaidCheckout(session) {
         const shippingAddress = session.metadata.shippingAddress ? JSON.parse(session.metadata.shippingAddress) : undefined;
         const order = await Order.create({ user: session.metadata.userId, products: products.map((p) => ({ product: p.id, quantity: p.quantity, price: p.price })), totalAmount: Number(session.amount_total || 0) / 100, stripeSessionId: session.id, shippingAddress });
         if (session.metadata.couponCode) await Coupon.findOneAndUpdate({ code: session.metadata.couponCode, userId: session.metadata.userId }, { isActive: false });
+        if (Number(session.amount_total || 0) >= 20000) await createNewCoupon(session.metadata.userId);
         return order;
     } catch (error) {
         if (error?.code !== 11000) { for (const [productId, quantity] of decremented) await Product.findByIdAndUpdate(productId, { $inc: { stock: quantity } }); throw error; }
@@ -84,3 +75,4 @@ export async function finalizePaidCheckout(session) {
 }
 
 async function createStripeCoupon(discountPercentage) { const coupon = await stripe.coupons.create({ percent_off: discountPercentage, duration: "once" }); return coupon.id; }
+async function createNewCoupon(userId) { await Coupon.findOneAndDelete({ userId }); const coupon = new Coupon({ code: "GIFT" + Math.random().toString(36).substring(2, 8).toUpperCase(), discountPercentage: 10, expirationDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), userId }); await coupon.save(); return coupon; }
