@@ -2,6 +2,9 @@ import { create } from "zustand";
 import axios from "../lib/axios";
 import { toast } from "react-hot-toast";
 
+const sameItem = (item, productId, variantId = null) =>
+	item._id === productId && (item.variantId || null) === (variantId || null);
+
 export const useCartStore = create((set, get) => ({
 	cart: [],
 	coupon: null,
@@ -40,58 +43,66 @@ export const useCartStore = create((set, get) => ({
 			get().calculateTotals();
 		} catch (error) {
 			set({ cart: [] });
-			toast.error(error.response.data.message || "An error occurred");
+			toast.error(error.response?.data?.message || "An error occurred");
 		}
 	},
 	clearCart: async () => {
-		set({ cart: [], coupon: null, total: 0, subtotal: 0 });
+		set({ cart: [], coupon: null, total: 0, subtotal: 0, isCouponApplied: false });
 	},
-	addToCart: async (product) => {
+	addToCart: async (product, variantId = null) => {
 		try {
-			await axios.post("/cart", { productId: product._id });
+			const selectedVariant = variantId ? product.variants?.find((variant) => variant._id === variantId) : null;
+			await axios.post("/cart", { productId: product._id, variantId: variantId || undefined });
 			toast.success("Product added to cart");
 
 			set((prevState) => {
-				const existingItem = prevState.cart.find((item) => item._id === product._id);
+				const existingItem = prevState.cart.find((item) => sameItem(item, product._id, variantId));
+				const cartItem = {
+					...product,
+					quantity: 1,
+					variantId: variantId || null,
+					selectedVariant: selectedVariant || null,
+					price: Number(selectedVariant?.price ?? product.price),
+				};
 				const newCart = existingItem
-					? prevState.cart.map((item) =>
-							item._id === product._id ? { ...item, quantity: item.quantity + 1 } : item
-					  )
-					: [...prevState.cart, { ...product, quantity: 1 }];
+					? prevState.cart.map((item) => sameItem(item, product._id, variantId) ? { ...item, quantity: item.quantity + 1 } : item)
+					: [...prevState.cart, cartItem];
 				return { cart: newCart };
 			});
 			get().calculateTotals();
 		} catch (error) {
-			toast.error(error.response.data.message || "An error occurred");
+			toast.error(error.response?.data?.message || "An error occurred");
 		}
 	},
-	removeFromCart: async (productId) => {
-		await axios.delete(`/cart`, { data: { productId } });
-		set((prevState) => ({ cart: prevState.cart.filter((item) => item._id !== productId) }));
-		get().calculateTotals();
-	},
-	updateQuantity: async (productId, quantity) => {
-		if (quantity === 0) {
-			get().removeFromCart(productId);
-			return;
+	removeFromCart: async (productId, variantId = null) => {
+		try {
+			await axios.delete(`/cart`, { data: { productId, variantId: variantId || undefined } });
+			set((prevState) => ({ cart: prevState.cart.filter((item) => !sameItem(item, productId, variantId)) }));
+			get().calculateTotals();
+		} catch (error) {
+			toast.error(error.response?.data?.message || "Unable to remove item");
 		}
-
-		await axios.put(`/cart/${productId}`, { quantity });
-		set((prevState) => ({
-			cart: prevState.cart.map((item) => (item._id === productId ? { ...item, quantity } : item)),
-		}));
-		get().calculateTotals();
+	},
+	updateQuantity: async (productId, quantity, variantId = null) => {
+		try {
+			if (quantity === 0) {
+				await get().removeFromCart(productId, variantId);
+				return;
+			}
+			await axios.put(`/cart/${productId}`, { quantity, variantId: variantId || undefined });
+			set((prevState) => ({
+				cart: prevState.cart.map((item) => sameItem(item, productId, variantId) ? { ...item, quantity } : item),
+			}));
+			get().calculateTotals();
+		} catch (error) {
+			toast.error(error.response?.data?.message || "Unable to update quantity");
+		}
 	},
 	calculateTotals: () => {
 		const { cart, coupon } = get();
-		const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+		const subtotal = cart.reduce((sum, item) => sum + Number(item.price || 0) * item.quantity, 0);
 		let total = subtotal;
-
-		if (coupon) {
-			const discount = subtotal * (coupon.discountPercentage / 100);
-			total = subtotal - discount;
-		}
-
+		if (coupon) total = subtotal - subtotal * (coupon.discountPercentage / 100);
 		set({ subtotal, total });
 	},
 }));
