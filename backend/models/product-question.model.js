@@ -1,0 +1,2 @@
+import mongoose from "mongoose";
+const schema=new mongoose.Schema({product:{type:mongoose.Schema.Types.ObjectId,ref:"Product",required:true},user:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true},question:{type:String,required:true,trim:true,maxlength:1000},answer:{type:String,trim:true,maxlength:2000},answeredAt:Date},{timestamps:true});schema.index({product:1,createdAt:-1});export default mongoose.model("ProductQuestion",schema);
