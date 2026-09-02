@@ -10,6 +10,7 @@ import couponRoutes from "./routes/coupon.route.js";
 import paymentRoutes from "./routes/payment.route.js";
 import analyticsRoutes from "./routes/analytics.route.js";
 import orderRoutes from "./routes/order.route.js";
+import supportRoutes from "./routes/support.route.js";
 import { stripeWebhook } from "./controllers/payment.controller.js";
 import { notFoundHandler, errorHandler } from "./middleware/error.middleware.js";
 import { apiRateLimit, corsPolicy, securityHeaders } from "./middleware/security.middleware.js";
@@ -42,6 +43,7 @@ app.use("/api/coupons", apiRateLimit({ max: 60, keyPrefix: "coupons" }), couponR
 app.use("/api/payments", apiRateLimit({ max: 30, keyPrefix: "payments" }), paymentRoutes);
 app.use("/api/analytics", apiRateLimit({ max: 60, keyPrefix: "analytics" }), analyticsRoutes);
 app.use("/api/orders", apiRateLimit({ max: 60, keyPrefix: "orders" }), orderRoutes);
+app.use("/api/support", apiRateLimit({ max: 30, keyPrefix: "support" }), supportRoutes);
 
 if (process.env.NODE_ENV === "production") {
     app.use(express.static(path.join(__dirname, "/frontend/dist")));
