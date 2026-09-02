@@ -81,7 +81,7 @@ beforeEach(() => {
     couponFindOne.mockResolvedValue(null);
     couponFindOneAndUpdate.mockResolvedValue(null);
     couponFindOneAndDelete.mockResolvedValue(null);
-    stripeCheckoutCreate.mockResolvedValue({ id: "cs_test_123" });
+    stripeCheckoutCreate.mockResolvedValue({ id: "cs_test_123", url: "https://checkout.stripe.test/session" });
     stripeCouponsCreate.mockResolvedValue({ id: "coupon_test" });
 });
 
@@ -306,7 +306,7 @@ describe("Stripe checkout controller", () => {
         await createCheckoutSession({ body: { products: [] }, user: { _id: "u1" } }, res);
 
         expect(res.status).toHaveBeenCalledWith(400);
-        expect(res.json).toHaveBeenCalledWith({ error: "Invalid or empty products array" });
+        expect(res.json).toHaveBeenCalledWith({ message: "Invalid or empty products array" });
         expect(stripeCheckoutCreate).not.toHaveBeenCalled();
     });
 
@@ -327,7 +327,11 @@ describe("Stripe checkout controller", () => {
             metadata: expect.objectContaining({ userId: "u1" }),
         }));
         expect(res.status).toHaveBeenCalledWith(200);
-        expect(res.json).toHaveBeenCalledWith({ id: "cs_test_123", totalAmount: 51 });
+        expect(res.json).toHaveBeenCalledWith({
+            id: "cs_test_123",
+            url: "https://checkout.stripe.test/session",
+            totalAmount: 51,
+        });
     });
 
     it("applies a valid coupon to the checkout total", async () => {
@@ -340,6 +344,10 @@ describe("Stripe checkout controller", () => {
         }, res);
 
         expect(stripeCouponsCreate).toHaveBeenCalledWith({ percent_off: 10, duration: "once" });
-        expect(res.json).toHaveBeenCalledWith({ id: "cs_test_123", totalAmount: 90 });
+        expect(res.json).toHaveBeenCalledWith({
+            id: "cs_test_123",
+            url: "https://checkout.stripe.test/session",
+            totalAmount: 90,
+        });
     });
 });
