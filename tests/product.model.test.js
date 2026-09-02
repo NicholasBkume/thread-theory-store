@@ -1,4 +1,3 @@
-import mongoose from "mongoose";
 import { describe, expect, it } from "vitest";
 import Product from "../backend/models/product.model.js";
 
@@ -45,6 +44,3 @@ describe("Product model", () => {
         });
     });
 });
-
-// Keep mongoose available to make the test's dependency explicit without opening a database connection.
-expect(mongoose).toBeDefined();
