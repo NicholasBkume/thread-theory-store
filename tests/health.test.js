@@ -10,10 +10,11 @@ describe("API health and protected routes", () => {
         expect(response.body).toEqual({ status: "ok" });
     });
 
-    it("returns 404 for an unknown API route", async () => {
+    it("returns a consistent JSON 404 for an unknown API route", async () => {
         const response = await request(app).get("/api/does-not-exist");
 
         expect(response.status).toBe(404);
+        expect(response.body).toEqual({ message: "Route not found: GET /api/does-not-exist" });
     });
 
     it.each([
