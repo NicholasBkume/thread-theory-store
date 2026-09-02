@@ -43,6 +43,8 @@
 
 **Data & Services:** MongoDB, Mongoose, Redis/ioredis, Stripe, Cloudinary
 
+**Testing:** Vitest, React Testing Library, jest-dom, User Event, Supertest
+
 ## Architecture
 
 ```text
@@ -110,9 +112,10 @@ Typical configuration:
 PORT=5000
 NODE_ENV=development
 
-MONGO_URI=your_mongodb_connection_string
+MONGO_URL=your_mongodb_connection_string
 
-JWT_SECRET=replace_with_a_long_random_secret
+ACCESS_TOKEN_SECRET=replace_with_a_long_random_secret
+REFRESH_TOKEN_SECRET=replace_with_a_long_random_secret
 CLIENT_URL=http://localhost:5173
 
 STRIPE_SECRET_KEY=your_stripe_secret_key
@@ -144,9 +147,10 @@ npm run dev --prefix frontend
 
 | Variable | Purpose | Required |
 |---|---|---|
-| `MONGO_URI` | MongoDB connection | Yes |
-| `JWT_SECRET` | JWT signing secret | Yes |
-| `CLIENT_URL` | Frontend URL used by Stripe redirects | Yes |
+| `MONGO_URL` | MongoDB connection | Yes |
+| `ACCESS_TOKEN_SECRET` | Access JWT signing secret | Yes |
+| `REFRESH_TOKEN_SECRET` | Refresh JWT signing secret | Yes |
+| `CLIENT_URL` | Frontend URL used by application/payment redirects | Yes |
 | `STRIPE_SECRET_KEY` | Stripe server credential | Yes |
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary account identifier | Yes for uploads |
 | `CLOUDINARY_API_KEY` | Cloudinary API credential | Yes for uploads |
@@ -198,6 +202,12 @@ Base URL: `/api`
 |---|---|---|---|
 | GET | `/analytics` | Admin | Get analytics and seven-day sales data |
 
+### Health
+
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| GET | `/health` | Public | Lightweight service health check |
+
 ## Example API Request
 
 Create a product:
@@ -205,7 +215,7 @@ Create a product:
 ```bash
 curl -X POST http://localhost:5000/api/products \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Cookie: accessToken=YOUR_TOKEN" \
   -d '{
     "name": "Classic Jacket",
     "description": "Lightweight everyday jacket",
@@ -224,6 +234,8 @@ curl -X POST http://localhost:5000/api/products \
 | `npm run dev` | Start backend with Nodemon |
 | `npm run build` | Install dependencies and build frontend |
 | `npm start` | Start production Express server |
+| `npm test` | Run backend/unit and API integration tests once |
+| `npm run test:watch` | Run backend tests in watch mode |
 
 ### Frontend
 
@@ -232,17 +244,48 @@ curl -X POST http://localhost:5000/api/products \
 | `npm run dev --prefix frontend` | Start Vite development server |
 | `npm run build --prefix frontend` | Create production build |
 | `npm run lint --prefix frontend` | Run ESLint |
+| `npm test --prefix frontend` | Run React component tests once |
+| `npm run test:watch --prefix frontend` | Run frontend tests in watch mode |
 | `npm run preview --prefix frontend` | Preview production build |
 
 ## Testing
 
-Automated unit and integration tests are not yet configured. The current frontend quality check is:
+The repository now includes automated testing at both the backend and frontend layers.
+
+### Backend — Vitest + Supertest
+
+Run:
 
 ```bash
-npm run lint --prefix frontend
+npm test
 ```
 
-Recommended next additions are Vitest, React Testing Library, and Supertest for API integration tests.
+Coverage currently includes:
+
+- Express health endpoint integration testing.
+- Unknown API route behavior.
+- Product Mongoose schema validation.
+- Required product fields.
+- Negative-price validation.
+
+Supertest exercises the Express application without starting a real HTTP listener, while Vitest provides the test runner.
+
+### Frontend — Vitest + React Testing Library
+
+Run:
+
+```bash
+npm test --prefix frontend
+```
+
+The current component test verifies that the home page renders its category catalogue and featured-product section. React Testing Library runs against a `jsdom` browser environment, with `jest-dom` matchers enabled through the test setup file.
+
+### Watch mode
+
+```bash
+npm run test:watch
+npm run test:watch --prefix frontend
+```
 
 ## Production Build
 
