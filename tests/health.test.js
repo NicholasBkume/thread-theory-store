@@ -5,14 +5,12 @@ import { app } from "../backend/server.js";
 describe("API health and protected routes", () => {
     it("returns a successful health response", async () => {
         const response = await request(app).get("/api/health");
-
         expect(response.status).toBe(200);
         expect(response.body).toEqual({ status: "ok" });
     });
 
     it("returns a consistent JSON 404 for an unknown API route", async () => {
         const response = await request(app).get("/api/does-not-exist");
-
         expect(response.status).toBe(404);
         expect(response.body).toEqual({ message: "Route not found: GET /api/does-not-exist" });
     });
@@ -23,9 +21,10 @@ describe("API health and protected routes", () => {
         ["cart", "/api/cart"],
         ["coupons", "/api/coupons"],
         ["analytics", "/api/analytics"],
+        ["orders", "/api/orders"],
+        ["admin orders", "/api/orders/admin"],
     ])("rejects unauthenticated %s requests", async (_name, route) => {
         const response = await request(app).get(route);
-
         expect(response.status).toBe(401);
         expect(response.body.message).toMatch(/^Unauthorized/);
     });
@@ -34,7 +33,6 @@ describe("API health and protected routes", () => {
         const response = await request(app)
             .post("/api/payments/create-checkout-session")
             .send({ products: [{ name: "Jacket", price: 25, quantity: 1 }] });
-
         expect(response.status).toBe(401);
         expect(response.body.message).toMatch(/^Unauthorized/);
     });
