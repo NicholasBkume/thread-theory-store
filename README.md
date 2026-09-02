@@ -11,7 +11,7 @@
 
 ## Live Demo
 
-> Add the deployed application URL here when production hosting is configured.
+> https://threadtheorystore.onrender.com/
 
 ## Screenshots
 
