@@ -10,7 +10,8 @@ import couponRoutes from "./routes/coupon.route.js";
 import paymentRoutes from "./routes/payment.route.js";
 import analyticsRoutes from "./routes/analytics.route.js";
 import { stripeWebhook } from "./controllers/payment.controller.js";
-
+import { notFoundHandler, errorHandler } from "./middleware/error.middleware.js";
+import { logger } from "./lib/logger.js";
 import { connectDB } from "./lib/db.js";
 
 dotenv.config();
@@ -42,9 +43,12 @@ if (process.env.NODE_ENV === "production") {
     });
 }
 
+app.use(notFoundHandler);
+app.use(errorHandler);
+
 if (process.env.NODE_ENV !== "test") {
     app.listen(PORT, () => {
-        console.log("Server is running on http://localhost:" + PORT);
+        logger.info("Server started", { port: PORT, environment: process.env.NODE_ENV || "development" });
         connectDB();
     });
 }
