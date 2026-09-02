@@ -1,0 +1,5 @@
+import mongoose from "mongoose";
+import Notification from "../models/notification.model.js";
+export const getNotifications=async(req,res)=>{try{const notifications=await Notification.find({user:req.user._id}).sort({createdAt:-1}).limit(50);const unread=await Notification.countDocuments({user:req.user._id,read:false});res.json({notifications,unread});}catch{res.status(500).json({message:"Failed to load notifications"});}};
+export const markNotificationRead=async(req,res)=>{try{if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid notification ID"});const notification=await Notification.findOneAndUpdate({_id:req.params.id,user:req.user._id},{read:true},{new:true});if(!notification)return res.status(404).json({message:"Notification not found"});res.json(notification);}catch{res.status(500).json({message:"Failed to update notification"});}};
+export const markAllNotificationsRead=async(req,res)=>{try{await Notification.updateMany({user:req.user._id,read:false},{read:true});res.json({success:true});}catch{res.status(500).json({message:"Failed to update notifications"});}};
