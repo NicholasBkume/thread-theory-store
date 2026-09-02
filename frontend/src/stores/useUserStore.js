@@ -1,123 +1,100 @@
-import {create} from "zustand";
+import { create } from "zustand";
 import axios from "../lib/axios";
-import {toast} from "react-hot-toast";
+import { toast } from "react-hot-toast";
 
-export const useUserStore = create((set, get) => ({
+export const useUserStore = create((set) => ({
     user: null,
     loading: false,
     checkingAuth: true,
 
     signup: async ({ name, email, password, confirmPassword }) => {
-            set({ loading: true });
-    
-            if (password !== confirmPassword) {
-                set({ loading: false });
-                return toast.error("Passwords do not match");
-            }
-    
-            try {
-                const res = await axios.post("/auth/signup", { name, email, password });
-                set({ user: res.data, loading: false });
-            } catch (error) {
-                set({ loading: false });
-                toast.error(error.response.data.message || "An error occurred");
-            }
-        },
-
-    signIn: async (name, email, password, comfirmPassword) => {
-        set({loading: true});
-
-        if (password !== comfirmPassword) {
-            set({loading: false});
-            return toast.error("Password do not match"); 
+        set({ loading: true });
+        if (password !== confirmPassword) {
+            set({ loading: false });
+            return toast.error("Passwords do not match");
         }
-
         try {
-            const res = await axios.post("/auth/signup", {name, email, password});
-            set({user: res.data, loading: false});
+            const res = await axios.post("/auth/signup", { name, email, password });
+            set({ user: res.data, loading: false });
         } catch (error) {
-            set({loading: false});
-            toast.error(error.response.data.message || "Something went wrong");
-        }       
+            set({ loading: false });
+            toast.error(error.response?.data?.message || "An error occurred");
+        }
     },
 
-    login : async (email, password) => {
-        set({loading: true});
+    signIn: async (email, password) => {
+        set({ loading: true });
         try {
-            const res = await axios.post("/auth/login", {email, password});
-            set({user: res.data, loading: false});
+            const res = await axios.post("/auth/login", { email, password });
+            set({ user: res.data, loading: false });
         } catch (error) {
-            set({loading: false});
-            toast.error(error.response.data.message || "Something went wrong");
+            set({ loading: false });
+            toast.error(error.response?.data?.message || "Invalid email or password");
         }
+    },
+
+    login: async (email, password) => {
+        return useUserStore.getState().signIn(email, password);
     },
 
     logout: async () => {
-            try {
-                await axios.post("/auth/logout");
-                set({ user: null });
-            } catch (error) {
-                toast.error(error.response?.data?.message || "An error occurred during logout");
-            }
-        },
+        try {
+            await axios.post("/auth/logout");
+            set({ user: null });
+        } catch (error) {
+            toast.error(error.response?.data?.message || "An error occurred during logout");
+        }
+    },
+
     checkAuth: async () => {
-        console.log('Checking auth...');
-            set({ checkingAuth: true });
-            try {
-                const response = await axios.get("/auth/profile");
-                console.log('Auth response:', response);
-                set({ user: response.data, checkingAuth: false });
-            } catch (error) {
-                console.log(error.message);
-                set({ checkingAuth: false, user: null });
-            }
-        },
-    
-        refreshToken: async () => {
-            // Prevent multiple simultaneous refresh attempts
-            if (get().checkingAuth) return;
-    
-            set({ checkingAuth: true });
-            try {
-                const response = await axios.post("/auth/refresh-token");
-                set({ checkingAuth: false });
-                return response.data;
-            } catch (error) {
-                set({ user: null, checkingAuth: false });
-                throw error;
-            }
-        },
+        set({ checkingAuth: true });
+        try {
+            const response = await axios.get("/auth/profile");
+            set({ user: response.data, checkingAuth: false });
+        } catch {
+            set({ checkingAuth: false, user: null });
+        }
+    },
+
+    refreshToken: async () => {
+        try {
+            const response = await axios.post("/auth/refresh-token", null, { _skipAuthRefresh: true });
+            return response.data;
+        } catch (error) {
+            set({ user: null });
+            throw error;
+        }
+    },
 }));
 
-// Axios interceptor for token refresh
 let refreshPromise = null;
 
 axios.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
-        if (error.response?.status === 401 && !originalRequest._retry) {
+
+        if (
+            error.response?.status === 401 &&
+            !originalRequest?._retry &&
+            !originalRequest?._skipAuthRefresh
+        ) {
             originalRequest._retry = true;
 
             try {
-                // If a refresh is already in progress, wait for it to complete
-                if (refreshPromise) {
-                    await refreshPromise;
-                    return axios(originalRequest);
+                if (!refreshPromise) {
+                    refreshPromise = useUserStore.getState().refreshToken()
+                        .finally(() => { refreshPromise = null; });
                 }
 
-                // Start a new refresh process
-                refreshPromise = useUserStore.getState().refreshToken();
                 await refreshPromise;
-                refreshPromise = null;
-
                 return axios(originalRequest);
             } catch (refreshError) {
-                // If refresh fails, redirect to login or handle as needed
-                useUserStore.getState().logout();
+                useUserStore.setState({ user: null });
                 return Promise.reject(refreshError);
             }
         }
+
         return Promise.reject(error);
     }
 );
