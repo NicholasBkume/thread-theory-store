@@ -105,41 +105,22 @@ export const createCheckoutSession = async (req, res) => {
 export const checkoutSuccess = async (req, res) => {
     try {
         const { sessionId } = req.body;
-        const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-        if (session.payment_status === "paid") {
-            if (session.metadata.couponCode) {
-                await Coupon.findOneAndUpdate(
-                    {
-                        code: session.metadata.couponCode,
-                        userId: session.metadata.userId,
-                    },
-                    { isActive: false }
-                );
-            }
-
-            const products = JSON.parse(session.metadata.products);
-            const newOrder = new Order({
-                user: session.metadata.userId,
-                products: products.map((product) => ({
-                    product: product.id,
-                    quantity: product.quantity,
-                    price: product.price,
-                })),
-                totalAmount: session.amount_total / 100,
-                stripeSessionId: sessionId,
-            });
-
-            await newOrder.save();
-
-            return res.status(200).json({
-                success: true,
-                message: "Payment successful, order created, and coupon deactivated if used.",
-                orderId: newOrder._id,
-            });
+        if (!sessionId) {
+            return res.status(400).json({ message: "sessionId is required" });
         }
 
-        return res.status(400).json({ message: "Payment has not been completed." });
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        const order = await finalizePaidCheckout(session);
+
+        if (!order) {
+            return res.status(400).json({ message: "Payment has not been completed." });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Payment successful, order created, and coupon deactivated if used.",
+            orderId: order._id,
+        });
     } catch (error) {
         console.error("Error processing successful checkout:", error);
         return res.status(500).json({
@@ -147,6 +128,85 @@ export const checkoutSuccess = async (req, res) => {
         });
     }
 };
+
+export const stripeWebhook = async (req, res) => {
+    const signature = req.headers["stripe-signature"];
+
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+        return res.status(500).json({ message: "Stripe webhook is not configured on the server." });
+    }
+
+    if (!signature) {
+        return res.status(400).json({ message: "Missing Stripe signature" });
+    }
+
+    let event;
+    try {
+        event = stripe.webhooks.constructEvent(req.body, signature, process.env.STRIPE_WEBHOOK_SECRET);
+    } catch (error) {
+        console.error("Invalid Stripe webhook signature:", error.message);
+        return res.status(400).json({ message: "Invalid Stripe webhook signature" });
+    }
+
+    try {
+        switch (event.type) {
+            case "checkout.session.completed":
+            case "checkout.session.async_payment_succeeded":
+                await finalizePaidCheckout(event.data.object);
+                break;
+            default:
+                break;
+        }
+
+        return res.status(200).json({ received: true });
+    } catch (error) {
+        console.error("Error processing Stripe webhook:", error);
+        return res.status(500).json({ message: "Webhook processing failed" });
+    }
+};
+
+export async function finalizePaidCheckout(session) {
+    if (!session || session.payment_status !== "paid") {
+        return null;
+    }
+
+    if (!session.id || !session.metadata?.userId || !session.metadata?.products) {
+        throw new Error("Stripe session is missing required order metadata");
+    }
+
+    const existingOrder = await Order.findOne({ stripeSessionId: session.id });
+    if (existingOrder) {
+        return existingOrder;
+    }
+
+    const products = JSON.parse(session.metadata.products);
+    if (!Array.isArray(products) || products.length === 0) {
+        throw new Error("Stripe session contains no order products");
+    }
+
+    const order = await Order.create({
+        user: session.metadata.userId,
+        products: products.map((product) => ({
+            product: product.id,
+            quantity: product.quantity,
+            price: product.price,
+        })),
+        totalAmount: Number(session.amount_total || 0) / 100,
+        stripeSessionId: session.id,
+    });
+
+    if (session.metadata.couponCode) {
+        await Coupon.findOneAndUpdate(
+            {
+                code: session.metadata.couponCode,
+                userId: session.metadata.userId,
+            },
+            { isActive: false }
+        );
+    }
+
+    return order;
+}
 
 async function createStripeCoupon(discountPercentage) {
     const coupon = await stripe.coupons.create({
