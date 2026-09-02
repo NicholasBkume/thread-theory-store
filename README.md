@@ -14,6 +14,29 @@
 
 > https://threadtheorystore.onrender.com/
 
+## Demo Credentials & Test Payments
+
+The live demo includes a dedicated test account for visitors who want to explore the **administrator features**, including the admin dashboard and product-management functionality.
+
+### Admin Demo Account
+
+| Credential | Value |
+|---|---|
+| **Email** | `test01@gmail.com` |
+| **Password** | `test123` |
+
+> **Demo account notice:** This account is intended exclusively for demonstrating the live application's admin functionality. Do not use these credentials for any real service or enter sensitive personal information into the demo account.
+
+### Testing the Purchase / Checkout Flow
+
+The purchase flow uses **Stripe Checkout in test mode**, so no real payment is required. To test a successful checkout, use one of Stripe's official test card numbers:
+
+**Stripe test cards:** [Test card numbers | Stripe Documentation](https://docs.stripe.com/testing#cards)
+
+For a standard successful card payment, Stripe provides the test card number `4242 4242 4242 4242`. Use any future expiration date, any three-digit CVC, and any valid ZIP/postal code when prompted.
+
+> **Important:** These are Stripe test-mode credentials. Do not enter real credit-card information into the demo's test checkout.
+
 ## Screenshots
 
 > Add screenshots to `docs/screenshots/` and update the paths below.
