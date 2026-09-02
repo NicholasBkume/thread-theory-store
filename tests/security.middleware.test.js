@@ -39,13 +39,14 @@ describe("security middleware", () => {
     });
 
     it("rate limits an API route and returns Retry-After", async () => {
-        const responses = [];
-        for (let index = 0; index < 31; index += 1) {
-            responses.push(await request(app).post("/api/payments/create-checkout-session"));
+        for (let index = 0; index < 30; index += 1) {
+            const response = await request(app).post("/api/payments/create-checkout-session");
+            expect(response.status).toBe(401);
         }
 
-        const limited = responses.at(-1);
-        expect(limited.status).toBe(401);
-        expect(limited.headers["retry-after"]).toBeUndefined();
+        const limited = await request(app).post("/api/payments/create-checkout-session");
+        expect(limited.status).toBe(429);
+        expect(Number(limited.headers["retry-after"])).toBeGreaterThan(0);
+        expect(limited.body.message).toContain("Too many requests");
     });
 });
