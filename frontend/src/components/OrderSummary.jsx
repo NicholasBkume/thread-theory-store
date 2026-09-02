@@ -2,11 +2,8 @@ import { motion } from "framer-motion";
 import { useCartStore } from "../stores/useCartStore";
 import { Link } from "react-router-dom";
 import { MoveRight } from "lucide-react";
-import { loadStripe } from "@stripe/stripe-js";
 import axios from "../lib/axios";
 import { toast } from "react-hot-toast";
-
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 const OrderSummary = () => {
     const { total, subtotal, coupon, isCouponApplied, cart } = useCartStore();
@@ -23,28 +20,17 @@ const OrderSummary = () => {
         }
 
         try {
-            const stripe = await stripePromise;
-            if (!stripe) {
-                throw new Error("Stripe could not be initialized. Check VITE_STRIPE_PUBLISHABLE_KEY.");
-            }
-
             const res = await axios.post("/payments/create-checkout-session", {
                 products: cart,
                 couponCode: coupon ? coupon.code : null,
             });
 
             const session = res.data;
-            if (!session?.id) {
-                throw new Error("The server did not return a Stripe checkout session.");
+            if (!session?.url) {
+                throw new Error("The server did not return a Stripe checkout URL.");
             }
 
-            const result = await stripe.redirectToCheckout({
-                sessionId: session.id,
-            });
-
-            if (result.error) {
-                throw result.error;
-            }
+            window.location.assign(session.url);
         } catch (error) {
             console.error("Checkout error:", error);
             toast.error(
