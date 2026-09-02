@@ -1,36 +1,22 @@
 import toast from "react-hot-toast";
-import { ShoppingCart, Heart } from "lucide-react";
+import { ShoppingCart, Heart, Star } from "lucide-react";
 import { useUserStore } from "../stores/useUserStore";
 import { useCartStore } from "../stores/useCartStore";
 import axios from "../lib/axios";
 import { useEffect, useState } from "react";
 
 const ProductCard = ({ product }) => {
-    const { user } = useUserStore();
-    const { addToCart } = useCartStore();
-    const [wishlisted, setWishlisted] = useState(false);
-    const outOfStock = Number(product.stock) <= 0;
-    const lowStock = !outOfStock && Number(product.stock) <= Number(product.lowStockThreshold ?? 5);
-
-    useEffect(() => {
-        if (!user) return;
-        axios.get("/account/wishlist").then((res) => setWishlisted((res.data.products || []).some((item) => item._id === product._id))).catch(() => {});
-    }, [user, product._id]);
-
-    const handleAddToCart = () => {
-        if (!user) return toast.error("Please login to add products to cart", { id: "login" });
-        if (outOfStock) return toast.error("This product is out of stock");
-        addToCart(product);
-    };
-    const toggleWishlist = async () => {
-        if (!user) return toast.error("Please login to use your wishlist", { id: "wishlist-login" });
-        try { const res = await axios.patch(`/account/wishlist/${product._id}`); setWishlisted(res.data.wishlisted); toast.success(res.data.wishlisted ? "Added to wishlist" : "Removed from wishlist"); }
-        catch (error) { toast.error(error.response?.data?.message || "Unable to update wishlist"); }
-    };
-
+    const { user } = useUserStore(); const { addToCart } = useCartStore();
+    const [wishlisted, setWishlisted] = useState(false); const [reviews, setReviews] = useState([]); const [average, setAverage] = useState(0); const [showReviews, setShowReviews] = useState(false); const [rating, setRating] = useState(5); const [comment, setComment] = useState("");
+    const outOfStock = Number(product.stock) <= 0; const lowStock = !outOfStock && Number(product.stock) <= Number(product.lowStockThreshold ?? 5);
+    useEffect(() => { if (user) axios.get("/account/wishlist").then((res) => setWishlisted((res.data.products || []).some((item) => item._id === product._id))).catch(() => {}); }, [user, product._id]);
+    const loadReviews = async () => { try { const res = await axios.get(`/account/reviews/${product._id}`); setReviews(res.data.reviews || []); setAverage(res.data.average || 0); setShowReviews(true); } catch { toast.error("Unable to load reviews"); } };
+    const submitReview = async (e) => { e.preventDefault(); if (!user) return toast.error("Please login to review products"); try { await axios.post(`/account/reviews/${product._id}`, { rating, comment }); setComment(""); await loadReviews(); toast.success("Review submitted"); } catch (error) { toast.error(error.response?.data?.message || "Unable to submit review"); } };
+    const handleAddToCart = () => { if (!user) return toast.error("Please login to add products to cart", { id: "login" }); if (outOfStock) return toast.error("This product is out of stock"); addToCart(product); };
+    const toggleWishlist = async () => { if (!user) return toast.error("Please login to use your wishlist", { id: "wishlist-login" }); try { const res = await axios.patch(`/account/wishlist/${product._id}`); setWishlisted(res.data.wishlisted); toast.success(res.data.wishlisted ? "Added to wishlist" : "Removed from wishlist"); } catch (error) { toast.error(error.response?.data?.message || "Unable to update wishlist"); } };
     return <div className='flex w-full relative flex-col overflow-hidden rounded-lg border border-stone-700 shadow-lg'>
         <div className='relative mx-3 mt-3 flex h-60 overflow-hidden rounded-xl'><img className='object-cover w-full' src={product.image} alt={product.name}/><button onClick={toggleWishlist} aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"} className='absolute right-3 top-3 rounded-full bg-stone-900/80 p-2 text-white hover:text-yellow-400'><Heart size={20} fill={wishlisted ? "currentColor" : "none"}/></button></div>
-        <div className='mt-4 px-5 pb-5'><h5 className='text-xl font-semibold tracking-tight text-white'>{product.name}</h5><p className='mt-2 text-sm text-stone-400 line-clamp-2'>{product.description}</p><div className='mt-3 flex items-center justify-between'><span className='text-2xl font-bold text-yellow-400'>${Number(product.price).toFixed(2)}</span><span className={`text-sm font-medium ${outOfStock ? 'text-red-400' : lowStock ? 'text-orange-400' : 'text-green-400'}`}>{outOfStock ? 'Out of stock' : lowStock ? `Only ${product.stock} left` : `${product.stock} in stock`}</span></div><button disabled={outOfStock} className='mt-4 flex w-full items-center justify-center rounded-lg bg-yellow-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-yellow-700 disabled:cursor-not-allowed disabled:bg-stone-600' onClick={handleAddToCart}><ShoppingCart size={22} className='mr-2'/> {outOfStock ? 'Out of stock' : 'Add to cart'}</button></div>
+        <div className='mt-4 px-5 pb-5'><h5 className='text-xl font-semibold text-white'>{product.name}</h5><p className='mt-2 text-sm text-stone-400 line-clamp-2'>{product.description}</p><div className='mt-3 flex items-center justify-between'><span className='text-2xl font-bold text-yellow-400'>${Number(product.price).toFixed(2)}</span><span className={`text-sm font-medium ${outOfStock ? 'text-red-400' : lowStock ? 'text-orange-400' : 'text-green-400'}`}>{outOfStock ? 'Out of stock' : lowStock ? `Only ${product.stock} left` : `${product.stock} in stock`}</span></div><button disabled={outOfStock} className='mt-4 flex w-full items-center justify-center rounded-lg bg-yellow-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-yellow-700 disabled:bg-stone-600' onClick={handleAddToCart}><ShoppingCart size={22} className='mr-2'/>{outOfStock ? 'Out of stock' : 'Add to cart'}</button><button onClick={loadReviews} className='mt-3 flex w-full items-center justify-center gap-2 text-sm text-yellow-400 hover:text-yellow-300'><Star size={16}/> {average ? `${average}/5` : 'Reviews'} ({reviews.length})</button>{showReviews && <div className='mt-3 border-t border-stone-700 pt-3 space-y-3'>{reviews.slice(0,3).map((review) => <div key={review._id} className='text-sm'><div className='flex justify-between'><strong>{review.user?.name || 'Customer'}</strong><span className='text-yellow-400'>{'★'.repeat(review.rating)}</span></div><p className='text-stone-400'>{review.comment}</p>{review.verifiedPurchase && <span className='text-xs text-green-400'>Verified purchase</span>}</div>)}{user && <form onSubmit={submitReview} className='space-y-2'><div className='flex gap-2'>{[1,2,3,4,5].map((value) => <button type='button' key={value} onClick={() => setRating(value)} aria-label={`${value} stars`} className={value <= rating ? 'text-yellow-400' : 'text-stone-600'}><Star size={18} fill='currentColor'/></button>)}</div><textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder='Share your experience...' className='w-full rounded border border-stone-600 bg-stone-700 p-2 text-sm text-white' rows='2' required/><button className='rounded bg-stone-700 px-3 py-1 text-sm hover:bg-stone-600'>Submit review</button></form>}</div>}</div>
     </div>;
 };
 export default ProductCard;
