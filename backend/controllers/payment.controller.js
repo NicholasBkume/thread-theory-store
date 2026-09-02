@@ -1,5 +1,7 @@
+import mongoose from "mongoose";
 import Coupon from "../models/coupon.model.js";
 import Order from "../models/order.model.js";
+import Product from "../models/product.model.js";
 import { stripe } from "../lib/stripe.js";
 
 export const createCheckoutSession = async (req, res) => {
@@ -16,12 +18,35 @@ export const createCheckoutSession = async (req, res) => {
             return res.status(400).json({ message: "Invalid or empty products array" });
         }
 
-        const lineItems = products.map((product) => {
-            const price = Number(product.price);
-            const quantity = Number(product.quantity) || 1;
+        const requestedProducts = products.map((product) => {
+            const productId = product?._id || product?.id;
+            const quantity = Number(product?.quantity);
 
-            if (!product.name || !Number.isFinite(price) || price <= 0 || quantity <= 0) {
-                throw new Error(`Invalid product data for ${product.name || "unknown product"}`);
+            if (!productId || !mongoose.isValidObjectId(productId)) {
+                throw new Error("Invalid product id");
+            }
+
+            if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+                throw new Error("Invalid product quantity");
+            }
+
+            return { productId: productId.toString(), quantity };
+        });
+
+        const uniqueProductIds = [...new Set(requestedProducts.map((product) => product.productId))];
+        const databaseProducts = await Product.find({ _id: { $in: uniqueProductIds } });
+        const productMap = new Map(databaseProducts.map((product) => [product._id.toString(), product]));
+
+        if (productMap.size !== uniqueProductIds.length) {
+            throw new Error("One or more products are no longer available");
+        }
+
+        const lineItems = requestedProducts.map(({ productId, quantity }) => {
+            const product = productMap.get(productId);
+            const price = Number(product.price);
+
+            if (!Number.isFinite(price) || price <= 0) {
+                throw new Error(`Product ${productId} has an invalid price`);
             }
 
             return {
@@ -66,10 +91,10 @@ export const createCheckoutSession = async (req, res) => {
                 userId: req.user._id.toString(),
                 couponCode: coupon?.code || "",
                 products: JSON.stringify(
-                    products.map((product) => ({
-                        id: product._id,
-                        quantity: Number(product.quantity) || 1,
-                        price: Number(product.price),
+                    requestedProducts.map(({ productId, quantity }) => ({
+                        id: productId,
+                        quantity,
+                        price: productMap.get(productId).price,
                     }))
                 ),
             },
@@ -96,7 +121,7 @@ export const createCheckoutSession = async (req, res) => {
         });
     } catch (error) {
         console.error("Error processing checkout:", error);
-        return res.status(500).json({
+        return res.status(400).json({
             message: error?.message || "Error processing checkout",
         });
     }
